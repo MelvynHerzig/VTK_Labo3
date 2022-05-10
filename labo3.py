@@ -2,85 +2,143 @@
 #
 # Labo 3 from VTK.
 #
-# Goal:
+# Goal: Displaying a knee in 4 different viewports with filters, contouring, clipping,and implicit functions.
 #
 # Authors: Forestier Quentin & Herzig Melvyn
 #
 # Date: 15.05.2022
 
 import vtk
-import time
 
-#
-# Next we create an instance of vtkConeSource and set some of its
-# properties. The instance of vtkConeSource "cone" is part of a visualization
-# pipeline (it is a source process object); it produces data (output type is
-# vtkPolyData) which other filters may process.
-#
-cone = vtk.vtkConeSource()
-cone.SetHeight( 6.0 )
-cone.SetRadius( 1.0 )
-cone.SetResolution( 10 )
+SKIN_COLOR = [0.77, 0.61, 0.60]
 
-#
-# In this example we terminate the pipeline with a mapper process object.
-# (Intermediate filters such as vtkShrinkPolyData could be inserted in
-# between the source and the mapper.)  We create an instance of
-# vtkPolyDataMapper to map the polygonal data into graphics primitives. We
-# connect the output of the cone souece to the input of this mapper.
-#
-coneMapper = vtk.vtkPolyDataMapper()
-coneMapper.SetInputConnection(cone.GetOutputPort())
+colors = vtk.vtkNamedColors()
 
-#
-# Create an actor to represent the cone. The actor orchestrates rendering of
-# the mapper's graphics primitives. An actor also refers to properties via a
-# vtkProperty instance, and includes an internal transformation matrix. We
-# set this actor's mapper to be coneMapper which we created above.
-#
-coneActor = vtk.vtkActor()
-coneActor.SetMapper(coneMapper)
+# Creating the knee actor. According to the following documentation:
+# https://kitware.github.io/vtk-examples/site/Python/IO/ReadSLC/
+reader = vtk.vtkSLCReader()
+reader.SetFileName("vw_knee.slc")
+reader.Update()
 
-#
-# Create two renderers and assign actors to them. A renderer renders into a
-# viewport within the vtkRenderWindow. It is part or all of a window on the
-# screen and it is responsible for drawing the actors it has.  We also set
-# the background color here. In this example we are adding the same actor
-# to two different renderers; it is okay to add different actors to
-# different renderers as well.
-#
-ren1 = vtk.vtkRenderer()
-ren1.AddActor(coneActor)
-ren1.SetBackground(0.1, 0.2, 0.4)
-ren1.SetViewport(0.0, 0.0, 0.5, 1.0)
+# Getting outline box
 
-ren2 = vtk.vtkRenderer()
-ren2.AddActor(coneActor)
-ren2.SetBackground(0.1, 0.2, 0.4)
-ren2.SetViewport(0.5, 0.0, 1.0, 1.0)
+outliner = vtk.vtkOutlineFilter()
+outliner.SetInputConnection(reader.GetOutputPort())
+outliner.Update()
 
-#
-# Finally we create the render window which will show up on the screen.
-# We add our two renderers into the render window using AddRenderer. We also
-# set the size to be 600 pixels by 300.
-#
+boxMapper = vtk.vtkPolyDataMapper()
+boxMapper.SetInputConnection(outliner.GetOutputPort())
+
+boxActor = vtk.vtkActor()
+boxActor.SetMapper(boxMapper)
+boxActor.GetProperty().SetColor([0.0, 0.0, 0.0])
+
+# Getting skin
+skinFilter = vtk.vtkContourFilter()
+skinFilter.SetInputConnection(reader.GetOutputPort())
+skinFilter.SetValue(0, 50)  # From tries
+
+skinMapper = vtk.vtkPolyDataMapper()
+skinMapper.SetInputConnection(skinFilter.GetOutputPort())
+skinMapper.SetScalarVisibility(0)
+
+skinActor = vtk.vtkActor()
+skinActor.SetMapper(skinMapper)
+skinActor.GetProperty().SetColor(SKIN_COLOR)
+
+# Getting bone
+boneFilter = vtk.vtkContourFilter()
+boneFilter.SetInputConnection(reader.GetOutputPort())
+boneFilter.SetValue(0, 72)  # From example
+
+boneMapper = vtk.vtkPolyDataMapper()
+boneMapper.SetInputConnection(boneFilter.GetOutputPort())
+boneMapper.SetScalarVisibility(0)
+
+boneActor = vtk.vtkActor()
+boneActor.SetMapper(boneMapper)
+boneActor.GetProperty().SetColor([0.90, 0.90, 0.90])
+
+# ---------------- CLIPPING SPHERE IN SKIN ----------------
+
+clipSphere = vtk.vtkSphere()
+clipSphere.SetRadius(45)
+clipSphere.SetCenter([70, 30, 100])
+
+clip = vtk.vtkClipPolyData()
+clip.SetClipFunction(clipSphere)
+clip.SetInputConnection(skinFilter.GetOutputPort())
+
+clipMapper = vtk.vtkPolyDataMapper()
+clipMapper.SetInputConnection(clip.GetOutputPort())
+clipMapper.ScalarVisibilityOff()
+
+# ----------------------------------------------------------------
+
+upperRightActor = vtk.vtkActor()
+upperRightActor.SetMapper(clipMapper)
+upperRightActor.GetProperty().SetColor(SKIN_COLOR)
+upperRightActor.GetProperty().SetOpacity(0.5)
+upperRightActor.SetBackfaceProperty(upperRightActor.MakeProperty())
+upperRightActor.GetBackfaceProperty().SetColor(SKIN_COLOR)
+
+lowerLeftActor = vtk.vtkActor()
+lowerLeftActor.SetMapper(clipMapper)
+lowerLeftActor.GetProperty().SetColor(SKIN_COLOR)
+
+
+# Setting the 2*2 grid of viewports. According to the following documentation:
+# https://kitware.github.io/vtk-examples/site/Cxx/Visualization/MultipleViewports/
+
+# Define viewport ranges.
+xmins = [0.0, 0.5, 0.0, 0.5]
+xmaxs = [0.5, 1.0, 0.5, 1.0]
+ymins = [0.5, 0.5, 0.0, 0.0]
+ymaxs = [1.0, 1.0, 0.5, 0.5]
+
+# Pink (top left), green (top right), blue (bottom left), grey (bottom right)
+renBkg = [[1.0, 0.8, 0.8],
+          [0.8, 1.0, 0.8],
+          [0.8, 0.8, 1.0],
+          [0.8, 0.8, 0.8]]
+
+renActors = [[boxActor, boneActor, skinActor],
+             [boxActor, boneActor, upperRightActor],
+             [boxActor, boneActor, lowerLeftActor],
+             [boxActor, boneActor]]
+
 renWin = vtk.vtkRenderWindow()
-renWin.AddRenderer( ren1 )
-renWin.AddRenderer( ren2 )
-renWin.SetSize(600, 300)
+interactor = vtk.vtkRenderWindowInteractor()
+interactor.SetRenderWindow(renWin)
+interactor.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
 
-#
-# Make one camera view 90 degrees from other.
-#
-ren1.ResetCamera()
-ren1.GetActiveCamera().Azimuth(90)
+camera = vtk.vtkCamera()
 
-#
-# Now we loop over 360 degreeees and render the cone each time.
-#
-for i in range(0,360):
-    time.sleep(0.03)
+for i in range(0, 4):
 
-    renWin.Render()
-    ren1.GetActiveCamera().Azimuth( 1 )
-    ren2.GetActiveCamera().Azimuth( 1 )
+    renderer = vtk.vtkRenderer()
+
+    renWin.AddRenderer(renderer)
+    renderer.SetViewport(xmins[i], ymins[i], xmaxs[i], ymaxs[i])
+
+    # Share the camera between viewports.
+    if i == 0:
+        camera = renderer.GetActiveCamera()
+        camera.Azimuth(30)
+        camera.Elevation(30)
+    else:
+        renderer.SetActiveCamera(camera)
+
+    for actor in renActors[i]:
+        renderer.AddActor(actor)
+
+    renderer.SetBackground(renBkg[i])
+    renderer.ResetCamera()
+
+# Starting display
+renWin.SetWindowName("MultipleViewPorts")
+renWin.SetSize(800, 800)
+
+interactor.Initialize()
+renWin.Render()
+interactor.Start()
