@@ -9,6 +9,7 @@
 # Date: 15.05.2022
 
 import vtk
+import os.path
 
 SKIN_COLOR = [0.77, 0.61, 0.60]
 
@@ -59,6 +60,40 @@ boneActor = vtk.vtkActor()
 boneActor.SetMapper(boneMapper)
 boneActor.GetProperty().SetColor([0.90, 0.90, 0.90])
 
+
+if os.path.exists("distances.vtk"):
+    # Reading mesh
+    boneReader = vtk.vtkPolyDataReader()
+    boneReader.SetFileName("distances.vtk")
+    boneReader.ReadAllScalarsOn()
+    boneReader.Update()
+
+    mapper = vtk.vtkPolyDataMapper()
+    mapper.SetInputConnection(boneReader.GetOutputPort())
+    mapper.SetScalarRange(boneReader.GetOutput().GetScalarRange())
+else:
+
+    # https://kitware.github.io/vtk-examples/site/Cxx/PolyData/DistancePolyDataFilter/
+    distanceFilter = vtk.vtkDistancePolyDataFilter()
+    distanceFilter.SignedDistanceOff()
+    distanceFilter.SetInputConnection(0, boneFilter.GetOutputPort())
+    distanceFilter.SetInputConnection(1, skinFilter.GetOutputPort())
+    distanceFilter.Update()
+
+    mapper = vtk.vtkPolyDataMapper()
+    mapper.SetInputConnection(distanceFilter.GetOutputPort())
+    mapper.SetScalarRange(distanceFilter.GetOutput().GetScalarRange())
+
+    writer = vtk.vtkPolyDataWriter()
+    writer.SetFileName("distances.vtk")
+    writer.SetFileTypeToBinary()
+    writer.SetInputConnection(distanceFilter.GetOutputPort())
+    writer.Write()
+
+actor = vtk.vtkActor()
+actor.SetMapper(mapper)
+
+
 # ---------------- CLIPPING SPHERE IN SKIN ----------------
 
 clipSphere = vtk.vtkSphere()
@@ -105,7 +140,7 @@ renBkg = [[1.0, 0.8, 0.8],
 renActors = [[boxActor, boneActor, skinActor],
              [boxActor, boneActor, upperRightActor],
              [boxActor, boneActor, lowerLeftActor],
-             [boxActor, boneActor]]
+             [boxActor, actor]]
 
 renWin = vtk.vtkRenderWindow()
 interactor = vtk.vtkRenderWindowInteractor()
