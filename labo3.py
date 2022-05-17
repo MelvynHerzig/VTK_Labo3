@@ -26,6 +26,9 @@ WINDOW_WIDTH = 800
 WINDOW_HEIGHT = 800
 WINDOW_NAME = "MultipleViewPorts"
 
+STRIP_COUNT = 19
+STRIP_RADIUS = 2
+
 # ------------------------ GENERAL ELEMENTS -----------------------
 # mostly topologies
 
@@ -80,6 +83,43 @@ boneActor = vtk.vtkActor()
 boneActor.SetMapper(boneMapper)
 boneActor.GetProperty().SetColor([0.90, 0.90, 0.90])
 
+
+def solid_knee_stripped_skin():
+    # Defining a plane to cut
+    plane = vtk.vtkPlane()
+
+    # Creating skin mapper
+    skinMapper = vtk.vtkPolyDataMapper()
+    skinMapper.SetInputConnection(skinFilter.GetOutputPort())
+    skinMapper.ScalarVisibilityOff()
+
+    # Making a cutter
+    cutter = vtk.vtkCutter()
+    cutter.SetInputData(skinMapper.GetInput())
+    cutter.SetCutFunction(plane)
+    cutter.GenerateValues(STRIP_COUNT, boxActor.GetBounds()[-2], boxActor.GetBounds()[-1])
+
+    # Making the triangle strips
+    stripper = vtk.vtkStripper()
+    stripper.SetInputConnection(cutter.GetOutputPort())
+    stripper.JoinContiguousSegmentsOn()
+
+    # Pass the output of the stripper through a tube filter
+    tubeFilter = vtk.vtkTubeFilter()
+    tubeFilter.SetRadius(STRIP_RADIUS)
+    tubeFilter.SetInputConnection(stripper.GetOutputPort())
+
+    # Create the lines mapper
+    linesMapper = vtk.vtkPolyDataMapper()
+    linesMapper.ScalarVisibilityOff()
+    linesMapper.SetInputConnection(tubeFilter.GetOutputPort())
+
+    # Create the lines actor
+    linesActor = vtk.vtkActor()
+    linesActor.SetMapper(linesMapper)
+    linesActor.GetProperty().SetColor(SKIN_COLOR)
+
+    return [boxActor, boneActor, linesActor]
 
 def solid_knee_half_transparent_clipped_skin_invisible_sphere():
     # Skin actor with front face half transparent and back face not transparent
@@ -159,7 +199,7 @@ ymaxs = [1.0, 1.0, 0.5, 0.5]
 # 0: top left, 1: top right, 2: bottom left, 3: bottom right
 renBkg = [LIGHT_RED, LIGHT_GREEN, LIGHT_BLUE, LIGHT_GREY]
 
-renActors = [solid_knee_half_transparent_clipped_skin_invisible_sphere(),
+renActors = [solid_knee_stripped_skin(),
              solid_knee_half_transparent_clipped_skin_invisible_sphere(),
              solid_knee_solid_clipped_skin_half_transparent_sphere(),
              rainbow_knee_no_skin()]
