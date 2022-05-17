@@ -2,7 +2,7 @@
 #
 # Labo 3 from VTK.
 #
-# Goal: Displaying a knee in 4 different viewports with filters, contouring, clipping,and implicit functions.
+# Goal: Displaying a knee in 4 different viewports with filters, contouring, clipping and different effects.
 #
 # Authors: Forestier Quentin & Herzig Melvyn
 #
@@ -11,18 +11,33 @@
 import vtk
 import os.path
 
+# --------------------------- CONSTANTS ---------------------------
+
 SKIN_COLOR = [0.77, 0.61, 0.60]
+
+BONE_SAVE_FILE_NAME = "bone_save.vtk"
+
+LIGHT_RED = [1.0, 0.8, 0.8]
+LIGHT_GREEN = [0.8, 1.0, 0.8]
+LIGHT_BLUE = [0.8, 0.8, 1.0]
+LIGHT_GREY = [0.8, 0.8, 0.8]
+
+WINDOW_WIDTH = 800
+WINDOW_HEIGHT = 800
+WINDOW_NAME = "MultipleViewPorts"
+
+# ------------------------ GENERAL ELEMENTS -----------------------
+# mostly topologies
 
 colors = vtk.vtkNamedColors()
 
-# Creating the knee actor. According to the following documentation:
+# Reading the knee slc file.
 # https://kitware.github.io/vtk-examples/site/Python/IO/ReadSLC/
 reader = vtk.vtkSLCReader()
 reader.SetFileName("vw_knee.slc")
 reader.Update()
 
-# Getting outline box
-
+# Getting the outline box actor used in each viewports
 outliner = vtk.vtkOutlineFilter()
 outliner.SetInputConnection(reader.GetOutputPort())
 outliner.Update()
@@ -34,20 +49,25 @@ boxActor = vtk.vtkActor()
 boxActor.SetMapper(boxMapper)
 boxActor.GetProperty().SetColor([0.0, 0.0, 0.0])
 
-# Getting skin
+# Getting skin topology
 skinFilter = vtk.vtkContourFilter()
 skinFilter.SetInputConnection(reader.GetOutputPort())
 skinFilter.SetValue(0, 50)  # From tries
 
-skinMapper = vtk.vtkPolyDataMapper()
-skinMapper.SetInputConnection(skinFilter.GetOutputPort())
-skinMapper.SetScalarVisibility(0)
+# Getting clipped skin mapper
+sphere = vtk.vtkSphere()
+sphere.SetRadius(45)
+sphere.SetCenter([70, 30, 100])
 
-skinActor = vtk.vtkActor()
-skinActor.SetMapper(skinMapper)
-skinActor.GetProperty().SetColor(SKIN_COLOR)
+clippedSkin = vtk.vtkClipPolyData()
+clippedSkin.SetClipFunction(sphere)
+clippedSkin.SetInputConnection(skinFilter.GetOutputPort())
 
-# Getting bone
+clippedSkinMapper = vtk.vtkPolyDataMapper()
+clippedSkinMapper.SetInputConnection(clippedSkin.GetOutputPort())
+clippedSkinMapper.ScalarVisibilityOff()
+
+# Getting bone actor
 boneFilter = vtk.vtkContourFilter()
 boneFilter.SetInputConnection(reader.GetOutputPort())
 boneFilter.SetValue(0, 72)  # From example
@@ -61,66 +81,71 @@ boneActor.SetMapper(boneMapper)
 boneActor.GetProperty().SetColor([0.90, 0.90, 0.90])
 
 
-if os.path.exists("distances.vtk"):
-    # Reading mesh
-    boneReader = vtk.vtkPolyDataReader()
-    boneReader.SetFileName("distances.vtk")
-    boneReader.ReadAllScalarsOn()
-    boneReader.Update()
+def solid_knee_half_transparent_clipped_skin_invisible_sphere():
+    # Skin actor with front face half transparent and back face not transparent
+    skinActor = vtk.vtkActor()
+    skinActor.SetMapper(clippedSkinMapper)
+    skinActor.GetProperty().SetColor(SKIN_COLOR)
+    skinActor.GetProperty().SetOpacity(0.5)
+    skinActor.SetBackfaceProperty(skinActor.MakeProperty())
+    skinActor.GetBackfaceProperty().SetColor(SKIN_COLOR)
 
-    mapper = vtk.vtkPolyDataMapper()
-    mapper.SetInputConnection(boneReader.GetOutputPort())
-    mapper.SetScalarRange(boneReader.GetOutput().GetScalarRange())
-else:
-
-    # https://kitware.github.io/vtk-examples/site/Cxx/PolyData/DistancePolyDataFilter/
-    distanceFilter = vtk.vtkDistancePolyDataFilter()
-    distanceFilter.SignedDistanceOff()
-    distanceFilter.SetInputConnection(0, boneFilter.GetOutputPort())
-    distanceFilter.SetInputConnection(1, skinFilter.GetOutputPort())
-    distanceFilter.Update()
-
-    mapper = vtk.vtkPolyDataMapper()
-    mapper.SetInputConnection(distanceFilter.GetOutputPort())
-    mapper.SetScalarRange(distanceFilter.GetOutput().GetScalarRange())
-
-    writer = vtk.vtkPolyDataWriter()
-    writer.SetFileName("distances.vtk")
-    writer.SetFileTypeToBinary()
-    writer.SetInputConnection(distanceFilter.GetOutputPort())
-    writer.Write()
-
-actor = vtk.vtkActor()
-actor.SetMapper(mapper)
+    return [boxActor, boneActor, skinActor]
 
 
-# ---------------- CLIPPING SPHERE IN SKIN ----------------
+def solid_knee_solid_clipped_skin_half_transparent_sphere():
+    # Skin actor
+    skinActor = vtk.vtkActor()
+    skinActor.SetMapper(clippedSkinMapper)
+    skinActor.GetProperty().SetColor(SKIN_COLOR)
 
-clipSphere = vtk.vtkSphere()
-clipSphere.SetRadius(45)
-clipSphere.SetCenter([70, 30, 100])
+    return [boxActor, boneActor, skinActor]
 
-clip = vtk.vtkClipPolyData()
-clip.SetClipFunction(clipSphere)
-clip.SetInputConnection(skinFilter.GetOutputPort())
 
-clipMapper = vtk.vtkPolyDataMapper()
-clipMapper.SetInputConnection(clip.GetOutputPort())
-clipMapper.ScalarVisibilityOff()
+def rainbow_knee_no_skin():
+    # Reading or creating distances vtk file for bone vertices to the nearest skin vertex
+    if os.path.exists(BONE_SAVE_FILE_NAME):
 
-# ----------------------------------------------------------------
+        # Reading bone polydata with distances
+        boneReader = vtk.vtkPolyDataReader()
+        boneReader.SetFileName(BONE_SAVE_FILE_NAME)
+        boneReader.ReadAllScalarsOn()
+        boneReader.Update()
 
-upperRightActor = vtk.vtkActor()
-upperRightActor.SetMapper(clipMapper)
-upperRightActor.GetProperty().SetColor(SKIN_COLOR)
-upperRightActor.GetProperty().SetOpacity(0.5)
-upperRightActor.SetBackfaceProperty(upperRightActor.MakeProperty())
-upperRightActor.GetBackfaceProperty().SetColor(SKIN_COLOR)
+        # Creating the bone mapper
+        boneMapper = vtk.vtkPolyDataMapper()
+        boneMapper.SetInputConnection(boneReader.GetOutputPort())
+        boneMapper.SetScalarRange(boneReader.GetOutput().GetScalarRange())
+    else:
 
-lowerLeftActor = vtk.vtkActor()
-lowerLeftActor.SetMapper(clipMapper)
-lowerLeftActor.GetProperty().SetColor(SKIN_COLOR)
+        # Computing the shortest distance each vertex of the bone to the skin
+        # https://kitware.github.io/vtk-examples/site/Cxx/PolyData/DistancePolyDataFilter/
+        distanceFilter = vtk.vtkDistancePolyDataFilter()
+        distanceFilter.SignedDistanceOff()
+        distanceFilter.SetInputConnection(0, boneFilter.GetOutputPort())
+        distanceFilter.SetInputConnection(1, skinFilter.GetOutputPort())
+        distanceFilter.Update()
 
+        # Saving bone polydata with distances for further usage.
+        writer = vtk.vtkPolyDataWriter()
+        writer.SetFileName(BONE_SAVE_FILE_NAME)
+        writer.SetFileTypeToBinary()
+        writer.SetInputConnection(distanceFilter.GetOutputPort())
+        writer.Write()
+
+        # Creating the bone mapper
+        boneMapper = vtk.vtkPolyDataMapper()
+        boneMapper.SetInputConnection(distanceFilter.GetOutputPort())
+        boneMapper.SetScalarRange(distanceFilter.GetOutput().GetScalarRange())
+
+    # Making bone actor
+    boneActor = vtk.vtkActor()
+    boneActor.SetMapper(boneMapper)
+
+    return [boxActor, boneActor]
+
+
+# ------------------------ VIEWPORTS -----------------------
 
 # Setting the 2*2 grid of viewports. According to the following documentation:
 # https://kitware.github.io/vtk-examples/site/Cxx/Visualization/MultipleViewports/
@@ -131,16 +156,13 @@ xmaxs = [0.5, 1.0, 0.5, 1.0]
 ymins = [0.5, 0.5, 0.0, 0.0]
 ymaxs = [1.0, 1.0, 0.5, 0.5]
 
-# Pink (top left), green (top right), blue (bottom left), grey (bottom right)
-renBkg = [[1.0, 0.8, 0.8],
-          [0.8, 1.0, 0.8],
-          [0.8, 0.8, 1.0],
-          [0.8, 0.8, 0.8]]
+# 0: top left, 1: top right, 2: bottom left, 3: bottom right
+renBkg = [LIGHT_RED, LIGHT_GREEN, LIGHT_BLUE, LIGHT_GREY]
 
-renActors = [[boxActor, boneActor, skinActor],
-             [boxActor, boneActor, upperRightActor],
-             [boxActor, boneActor, lowerLeftActor],
-             [boxActor, actor]]
+renActors = [solid_knee_half_transparent_clipped_skin_invisible_sphere(),
+             solid_knee_half_transparent_clipped_skin_invisible_sphere(),
+             solid_knee_solid_clipped_skin_half_transparent_sphere(),
+             rainbow_knee_no_skin()]
 
 renWin = vtk.vtkRenderWindow()
 interactor = vtk.vtkRenderWindowInteractor()
@@ -149,6 +171,7 @@ interactor.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
 
 camera = vtk.vtkCamera()
 
+# Creating each viewport, top left, top right, bottom left, bottom right
 for i in range(0, 4):
 
     renderer = vtk.vtkRenderer()
@@ -170,9 +193,9 @@ for i in range(0, 4):
     renderer.SetBackground(renBkg[i])
     renderer.ResetCamera()
 
-# Starting display
-renWin.SetWindowName("MultipleViewPorts")
-renWin.SetSize(800, 800)
+# Displaying
+renWin.SetWindowName(WINDOW_NAME)
+renWin.SetSize(WINDOW_WIDTH, WINDOW_HEIGHT)
 
 interactor.Initialize()
 renWin.Render()
