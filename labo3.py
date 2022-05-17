@@ -15,6 +15,9 @@ import os.path
 
 SKIN_COLOR = [0.77, 0.61, 0.60]
 
+SPHERE_CENTER = [70, 30, 100]
+SPHERE_RADIUS = 45
+
 BONE_SAVE_FILE_NAME = "bone_save.vtk"
 
 LIGHT_RED = [1.0, 0.8, 0.8]
@@ -56,8 +59,8 @@ skinFilter.SetValue(0, 50)  # From tries
 
 # Getting clipped skin mapper
 sphere = vtk.vtkSphere()
-sphere.SetRadius(45)
-sphere.SetCenter([70, 30, 100])
+sphere.SetRadius(SPHERE_RADIUS)
+sphere.SetCenter(SPHERE_CENTER)
 
 clippedSkin = vtk.vtkClipPolyData()
 clippedSkin.SetClipFunction(sphere)
@@ -99,7 +102,30 @@ def solid_knee_solid_clipped_skin_half_transparent_sphere():
     skinActor.SetMapper(clippedSkinMapper)
     skinActor.GetProperty().SetColor(SKIN_COLOR)
 
-    return [boxActor, boneActor, skinActor]
+    # https://python.hotexamples.com/fr/examples/vtk/-/vtkSampleFunction/python-vtksamplefunction-function-examples.html
+    sphereFunction = vtk.vtkSampleFunction()
+    sphereFunction.SetImplicitFunction(sphere)
+
+    sphereBounds = []
+
+    for c in SPHERE_CENTER:
+        sphereBounds.append(c - SPHERE_RADIUS)
+        sphereBounds.append(c + SPHERE_RADIUS)
+
+    sphereFunction.SetModelBounds(sphereBounds)
+
+    contour = vtk.vtkContourFilter()
+    contour.SetInputConnection(sphereFunction.GetOutputPort())
+
+    sphereMapper = vtk.vtkPolyDataMapper()
+    sphereMapper.SetInputConnection(contour.GetOutputPort())
+    sphereMapper.ScalarVisibilityOff()
+
+    sphereActor = vtk.vtkActor()
+    sphereActor.SetMapper(sphereMapper)
+    sphereActor.GetProperty().SetOpacity(0.1)
+
+    return [boxActor, boneActor, skinActor, sphereActor]
 
 
 def rainbow_knee_no_skin():
