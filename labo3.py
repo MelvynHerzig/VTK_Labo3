@@ -12,18 +12,21 @@ import vtk
 import os.path
 
 # --------------------------- CONSTANTS ---------------------------
-
 SKIN_COLOR = [0.77, 0.61, 0.60]
 
-SPHERE_CENTER = [70, 30, 100]
+SPHERE_CENTER = [70, 40, 100]
 SPHERE_RADIUS = 45
 
+SCANER_FILE_NAME = "vw_knee.slc"
 BONE_SAVE_FILE_NAME = "bone_save.vtk"
 
 LIGHT_RED = [1.0, 0.8, 0.8]
 LIGHT_GREEN = [0.8, 1.0, 0.8]
 LIGHT_BLUE = [0.8, 0.8, 1.0]
 LIGHT_GREY = [0.8, 0.8, 0.8]
+UGLY_YELLOW = [1, 0.82, 0.37]
+BONE_COLOR = [0.90, 0.90, 0.90]
+BLACK = [0.0, 0.0, 0.0]
 
 WINDOW_WIDTH = 800
 WINDOW_HEIGHT = 800
@@ -35,30 +38,26 @@ STRIP_RADIUS = 2
 # ------------------------ GENERAL ELEMENTS -----------------------
 # mostly topologies
 
-colors = vtk.vtkNamedColors()
-
 # Reading the knee slc file.
 # https://kitware.github.io/vtk-examples/site/Python/IO/ReadSLC/
 reader = vtk.vtkSLCReader()
-reader.SetFileName("vw_knee.slc")
-reader.Update()
+reader.SetFileName(SCANER_FILE_NAME)
 
 # Getting the outline box actor used in each viewports
 outliner = vtk.vtkOutlineFilter()
 outliner.SetInputConnection(reader.GetOutputPort())
-outliner.Update()
 
 boxMapper = vtk.vtkPolyDataMapper()
 boxMapper.SetInputConnection(outliner.GetOutputPort())
 
 boxActor = vtk.vtkActor()
 boxActor.SetMapper(boxMapper)
-boxActor.GetProperty().SetColor([0.0, 0.0, 0.0])
+boxActor.GetProperty().SetColor(BLACK)
 
 # Getting skin topology
 skinFilter = vtk.vtkContourFilter()
 skinFilter.SetInputConnection(reader.GetOutputPort())
-skinFilter.SetValue(0, 50)  # From tries
+skinFilter.SetValue(0, 50)  # 50 is value issued from random tries.
 
 # Getting clipped skin mapper
 sphere = vtk.vtkSphere()
@@ -80,11 +79,11 @@ boneFilter.SetValue(0, 72)  # From example
 
 boneMapper = vtk.vtkPolyDataMapper()
 boneMapper.SetInputConnection(boneFilter.GetOutputPort())
-boneMapper.SetScalarVisibility(0)
+boneMapper.ScalarVisibilityOff()
 
 boneActor = vtk.vtkActor()
 boneActor.SetMapper(boneMapper)
-boneActor.GetProperty().SetColor([0.90, 0.90, 0.90])
+boneActor.GetProperty().SetColor(BONE_COLOR)
 
 
 def solid_knee_stripped_skin():
@@ -107,22 +106,23 @@ def solid_knee_stripped_skin():
     stripper.SetInputConnection(cutter.GetOutputPort())
     stripper.JoinContiguousSegmentsOn()
 
-    # Pass the output of the stripper through a tube filter
-    tubeFilter = vtk.vtkTubeFilter()
-    tubeFilter.SetRadius(STRIP_RADIUS)
-    tubeFilter.SetInputConnection(stripper.GetOutputPort())
+    # Making nice tubes around lines of stripper
+    tubesFilter = vtk.vtkTubeFilter()
+    tubesFilter.SetRadius(STRIP_RADIUS)
+    tubesFilter.SetInputConnection(stripper.GetOutputPort())
 
-    # Create the lines mapper
-    linesMapper = vtk.vtkPolyDataMapper()
-    linesMapper.ScalarVisibilityOff()
-    linesMapper.SetInputConnection(tubeFilter.GetOutputPort())
+    # Create tubes mapper
+    tubesMapper = vtk.vtkPolyDataMapper()
+    tubesMapper.ScalarVisibilityOff()
+    tubesMapper.SetInputConnection(tubesFilter.GetOutputPort())
 
-    # Create the lines actor
-    linesActor = vtk.vtkActor()
-    linesActor.SetMapper(linesMapper)
-    linesActor.GetProperty().SetColor(SKIN_COLOR)
+    # Create tubes actor
+    tubesActor = vtk.vtkActor()
+    tubesActor.SetMapper(tubesMapper)
+    tubesActor.GetProperty().SetColor(SKIN_COLOR)
 
-    return [boxActor, boneActor, linesActor]
+    return [boxActor, boneActor, tubesActor]
+
 
 def solid_knee_half_transparent_clipped_skin_invisible_sphere():
     # Skin actor with front face half transparent and back face not transparent
@@ -163,7 +163,8 @@ def solid_knee_solid_clipped_skin_half_transparent_sphere():
 
     sphereActor = vtk.vtkActor()
     sphereActor.SetMapper(sphereMapper)
-    sphereActor.GetProperty().SetOpacity(0.1)
+    sphereActor.GetProperty().SetOpacity(0.3)
+    sphereActor.GetProperty().SetColor(UGLY_YELLOW)
 
     return [boxActor, boneActor, skinActor, sphereActor]
 
